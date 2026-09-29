@@ -33,6 +33,26 @@ const panelBody: React.CSSProperties = {
   fontSize: 14,
 };
 
+// ─── OpenAI key ──────────────────────────────────────────────────────────────
+// Locally, REACT_APP_OPENAI_API_KEY from .env is used. On the hosted site each
+// user supplies their own key, which is kept only in their browser.
+
+const OPENAI_KEY_STORAGE = 'cocho.openaiKey';
+
+function getOpenAIKey(): string | null {
+  if (process.env.REACT_APP_OPENAI_API_KEY) return process.env.REACT_APP_OPENAI_API_KEY;
+  let key: string | null = null;
+  try { key = localStorage.getItem(OPENAI_KEY_STORAGE); } catch {}
+  if (key) return key;
+  key = window.prompt('Paste your OpenAI API key to use auto-transcribe.\nIt is stored only in this browser.')?.trim() || null;
+  if (key) { try { localStorage.setItem(OPENAI_KEY_STORAGE, key); } catch {} }
+  return key;
+}
+
+function clearOpenAIKey() {
+  try { localStorage.removeItem(OPENAI_KEY_STORAGE); } catch {}
+}
+
 // ─── Shared types ────────────────────────────────────────────────────────────
 
 interface AudioTag {
@@ -267,8 +287,8 @@ function AudioPanel({ audioTags, setAudioTags, audioRef, scriptTags, onTranscrip
 
   async function autoTranscribe() {
     if (!audioFile) return;
-    const apiKey = process.env.REACT_APP_OPENAI_API_KEY;
-    if (!apiKey) { setTranscriptError('REACT_APP_OPENAI_API_KEY is not set.'); return; }
+    const apiKey = getOpenAIKey();
+    if (!apiKey) { setTranscriptError('An OpenAI API key is required for auto-transcribe.'); return; }
     setTranscribing(true);
     setTranscriptError(null);
     setTranscriptWords(null);
@@ -284,6 +304,7 @@ function AudioPanel({ audioTags, setAudioTags, audioRef, scriptTags, onTranscrip
         body,
       });
       if (!res.ok) {
+        if (res.status === 401) clearOpenAIKey();
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.error?.message ?? `HTTP ${res.status}`);
       }
